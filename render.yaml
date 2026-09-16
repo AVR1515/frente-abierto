@@ -1,0 +1,16 @@
+# Blueprint de Render.com para el servidor (Fase 8). Se despliega solo: en el
+# dashboard de Render, "New" > "Blueprint" > elegir este repo, y Render lee este
+# archivo automáticamente. No usa Docker: corre Node nativo con los mismos
+# comandos que usamos en local (npm install / npm run build / npm run start),
+# apuntando siempre a la raíz del monorepo porque /server depende de /shared.
+services:
+  - type: web
+    name: frente-abierto-server
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run build --workspace server
+    startCommand: npm run start --workspace server
+    envVars:
+      - key: NODE_VERSION
+        value: 20.18.0
