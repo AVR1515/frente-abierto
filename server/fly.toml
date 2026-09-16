@@ -1,0 +1,35 @@
+# Plantilla de despliegue en Fly.io (Fase 8). Requiere la CLI `fly` y una cuenta.
+# Se corre `fly launch` desde la raíz del repo (usa el Dockerfile de la raíz) y
+# luego `fly deploy`. Cambiá `app` por un nombre único.
+
+app = "frente-abierto-server"
+primary_region = "eze" # Buenos Aires; elegí la región más cercana a tus jugadores
+
+[build]
+
+[env]
+  PORT = "2567"
+
+[[services]]
+  internal_port = 2567
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  # Los WebSockets necesitan una sola instancia "always on" (sin auto-stop) para
+  # no cortar las conexiones activas de las salas.
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 1000
+    soft_limit = 800
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512

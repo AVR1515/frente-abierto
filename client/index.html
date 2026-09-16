@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Frente Abierto</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background: #1a1a1a;
+        width: 100%;
+        height: 100%;
+      }
+      #app {
+        width: 100vw;
+        height: 100vh;
+        position: relative;
+      }
+      #ui-overlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+        font-family: sans-serif;
+        color: white;
+      }
+      #ui-overlay.hidden {
+        display: none;
+      }
+      .panel {
+        background: rgba(20, 20, 20, 0.92);
+        border: 1px solid #444;
+        border-radius: 8px;
+        padding: 24px 32px;
+        min-width: 280px;
+        text-align: center;
+      }
+      .panel h2 {
+        margin-top: 0;
+      }
+      .panel button {
+        display: block;
+        width: 100%;
+        margin: 8px 0;
+        padding: 10px;
+        background: #2b2f36;
+        color: white;
+        border: 1px solid #555;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+      }
+      .panel button:hover {
+        background: #3d434d;
+      }
+      .panel textarea,
+      .panel input[type="text"] {
+        width: 100%;
+        box-sizing: border-box;
+        margin: 6px 0;
+        padding: 8px;
+        background: #15171b;
+        color: white;
+        border: 1px solid #555;
+        border-radius: 4px;
+        font-family: inherit;
+      }
+      .panel label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        margin: 6px 0;
+        text-align: left;
+      }
+      #hud {
+        position: fixed;
+        left: 16px;
+        bottom: 16px;
+        color: white;
+        font-family: sans-serif;
+        z-index: 5;
+        text-shadow: 0 1px 2px black;
+      }
+      #minimap {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        background: rgba(0, 0, 0, 0.5);
+        border: 1px solid #555;
+        z-index: 5;
+      }
+      #tickets {
+        position: fixed;
+        top: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 5;
+        font-family: sans-serif;
+        color: white;
+        text-align: center;
+        text-shadow: 0 1px 2px black;
+        min-width: 320px;
+      }
+      #tickets .bars {
+        display: flex;
+        gap: 4px;
+        margin-top: 4px;
+        height: 10px;
+      }
+      #tickets .bar-red,
+      #tickets .bar-blue {
+        height: 100%;
+        background: #ef5350;
+      }
+      #tickets .bar-blue {
+        background: #42a5f5;
+      }
+      #tickets .bar-bg {
+        flex: 1;
+        background: #222;
+        position: relative;
+        overflow: hidden;
+        border-radius: 2px;
+      }
+      #vehicle-hint {
+        position: fixed;
+        left: 50%;
+        bottom: 60px;
+        transform: translateX(-50%);
+        color: white;
+        font-family: sans-serif;
+        z-index: 5;
+        text-shadow: 0 1px 2px black;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 4px 10px;
+        border-radius: 4px;
+      }
+      #vehicle-hint.hidden {
+        display: none;
+      }
+      #room-info {
+        position: fixed;
+        top: 16px;
+        left: 16px;
+        z-index: 5;
+        font-family: sans-serif;
+        color: white;
+        text-shadow: 0 1px 2px black;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 6px 10px;
+        border-radius: 4px;
+        font-size: 13px;
+      }
+      #room-info.hidden {
+        display: none;
+      }
+      #commander-panel {
+        position: fixed;
+        right: 16px;
+        top: 16px;
+        z-index: 5;
+        font-family: sans-serif;
+        color: white;
+        text-shadow: 0 1px 2px black;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 8px 10px;
+        border-radius: 4px;
+        font-size: 13px;
+        text-align: right;
+      }
+      #commander-panel.hidden {
+        display: none;
+      }
+      #commander-panel button {
+        margin-top: 6px;
+        padding: 4px 8px;
+        background: #2b2f36;
+        color: white;
+        border: 1px solid #555;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="ui-overlay"><div class="panel" id="panel-content"></div></div>
+    <div id="hud"></div>
+    <div id="tickets"></div>
+    <div id="vehicle-hint" class="hidden"></div>
+    <div id="room-info" class="hidden"></div>
+    <div id="commander-panel" class="hidden"></div>
+    <canvas id="minimap" width="160" height="160"></canvas>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
