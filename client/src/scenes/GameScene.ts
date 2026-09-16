@@ -20,10 +20,13 @@ import {
 import {
   showEvolutionChoice,
   showMatchEnd,
+  showPauseMenu,
+  hideOverlay,
   updateCommanderPanel,
   updateHud,
   updateTickets,
   updateVehicleHint,
+  updatePerfPanel,
 } from "../ui/overlay";
 
 interface RemoteVisual {
@@ -72,6 +75,9 @@ const TEAM_COLORS: Record<string, number> = { red: 0xef5350, blue: 0x42a5f5, neu
 export class GameScene {
   private app: PIXI.Application;
   private worldContainer = new PIXI.Container();
+  private vehicleLayer = new PIXI.Container();
+  private playerLayer = new PIXI.Container();
+  private projectileLayer = new PIXI.Container();
   private visuals = new Map<string, RemoteVisual>();
   private projectileVisuals = new Map<string, ProjectileVisual>();
   private controlPointVisuals = new Map<string, ControlPointVisual>();
@@ -98,6 +104,9 @@ export class GameScene {
   private predictedY = 0;
   private pendingInputs: { seq: number; moveX: number; moveY: number; dt: number }[] = [];
 
+  private paused = false;
+  private pingMs: number | null = null;
+
   constructor(
     private room: Room,
     canvasParent: HTMLElement,
@@ -115,23 +124,111 @@ export class GameScene {
 
     this.app.stage.addChild(this.worldContainer);
     this.drawMapBounds();
+    // capas explícitas: vehículos siempre debajo de jugadores, proyectiles siempre arriba de todo,
+    // sin importar el orden en que el servidor sincronice cada colección
+    this.worldContainer.addChild(this.vehicleLayer);
+    this.worldContainer.addChild(this.playerLayer);
+    this.worldContainer.addChild(this.projectileLayer);
 
     this.setupInput();
     this.setupNetworkListeners();
 
     this.app.ticker.add(() => this.onRenderTick());
     setInterval(() => this.sendInput(), 1000 / INPUT_SEND_RATE_HZ);
+
+    this.room.onMessage("pong", (message: { t: number }) => {
+      this.pingMs = performance.now() - message.t;
+    });
+    setInterval(() => {
+      if (!this.paused) this.room.send("ping", { t: performance.now() });
+    }, 2000);
+    setInterval(() => {
+      updatePerfPanel(this.app.ticker.FPS, this.pingMs, {
+        players: this.visuals.size,
+        projectiles: this.projectileVisuals.size,
+        vehicles: this.vehicleVisuals.size,
+      });
+    }, 500);
+  }
+
+  private togglePause() {
+    this.paused = !this.paused;
+    if (this.paused) {
+      this.keys.w = this.keys.a = this.keys.s = this.keys.d = false;
+      showPauseMenu(
+        () => {
+          this.paused = false;
+        },
+        () => {
+          this.room.leave();
+          location.href = location.pathname;
+        }
+      );
+    } else {
+      hideOverlay();
+    }
   }
 
   private drawMapBounds() {
+    // piso con textura sutil de grilla, para que el mapa no se sienta vacío
+    const floor = new PIXI.Graphics();
+    floor.beginFill(0x1e2126);
+    floor.drawRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+    floor.endFill();
+
+    const gridSize = 100;
+    floor.lineStyle(1, 0x2a2e35, 1);
+    for (let x = 0; x <= MAP_WIDTH; x += gridSize) {
+      floor.moveTo(x, 0);
+      floor.lineTo(x, MAP_HEIGHT);
+    }
+    for (let y = 0; y <= MAP_HEIGHT; y += gridSize) {
+      floor.moveTo(0, y);
+      floor.lineTo(MAP_WIDTH, y);
+    }
+    this.worldContainer.addChild(floor);
+
+    this.drawMapDecorations();
+
     const bounds = new PIXI.Graphics();
     bounds.lineStyle(4, 0x444444, 1);
     bounds.drawRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
     this.worldContainer.addChild(bounds);
   }
 
+  /** Rocas y escombros puramente decorativos (no colisionan) para que el mapa se vea menos plano. */
+  private drawMapDecorations() {
+    const rng = createSeededRandom(1337);
+    const decorations = new PIXI.Graphics();
+
+    for (let i = 0; i < 46; i++) {
+      const x = rng() * MAP_WIDTH;
+      const y = rng() * MAP_HEIGHT;
+      const size = 8 + rng() * 18;
+      const shade = 0x2c3038 + Math.floor(rng() * 3) * 0x040404;
+
+      decorations.beginFill(shade, 0.8);
+      const sides = 5 + Math.floor(rng() * 3);
+      const points: number[] = [];
+      for (let s = 0; s < sides; s++) {
+        const angle = (s / sides) * Math.PI * 2;
+        const r = size * (0.7 + rng() * 0.3);
+        points.push(x + Math.cos(angle) * r, y + Math.sin(angle) * r);
+      }
+      decorations.drawPolygon(points);
+      decorations.endFill();
+    }
+
+    this.worldContainer.addChild(decorations);
+  }
+
   private setupInput() {
     window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        this.togglePause();
+        return;
+      }
+      if (this.paused) return;
       if (e.key.toLowerCase() === "e") {
         this.handleVehicleInteractKey();
         return;
@@ -144,6 +241,7 @@ export class GameScene {
       this.mouseScreen.y = e.clientY;
     });
     window.addEventListener("mousedown", (e) => {
+      if (this.paused) return;
       if (e.button === 2 && this.isCommander) {
         const worldX = this.mouseScreen.x - this.worldContainer.x;
         const worldY = this.mouseScreen.y - this.worldContainer.y;
@@ -247,7 +345,7 @@ export class GameScene {
       container.addChild(chassis, turret, hpBar, levelText);
       container.x = vehicle.x;
       container.y = vehicle.y;
-      this.worldContainer.addChild(container);
+      this.vehicleLayer.addChild(container);
 
       const visual: VehicleVisual = {
         container,
@@ -324,7 +422,7 @@ export class GameScene {
       container.addChild(levelText);
       container.x = player.x;
       container.y = player.y;
-      this.worldContainer.addChild(container);
+      this.playerLayer.addChild(container);
 
       const visual: RemoteVisual = {
         container,
@@ -381,7 +479,7 @@ export class GameScene {
     this.room.state.players.onRemove((_player: any, sessionId: string) => {
       const visual = this.visuals.get(sessionId);
       if (visual) {
-        this.worldContainer.removeChild(visual.container);
+        this.playerLayer.removeChild(visual.container);
         visual.container.destroy({ children: true });
         this.visuals.delete(sessionId);
       }
@@ -394,7 +492,7 @@ export class GameScene {
       graphic.endFill();
       graphic.x = projectile.x;
       graphic.y = projectile.y;
-      this.worldContainer.addChild(graphic);
+      this.projectileLayer.addChild(graphic);
       this.projectileVisuals.set(id, { graphic });
 
       projectile.onChange(() => {
@@ -406,7 +504,7 @@ export class GameScene {
     this.room.state.projectiles.onRemove((_projectile: any, id: string) => {
       const visual = this.projectileVisuals.get(id);
       if (visual) {
-        this.worldContainer.removeChild(visual.graphic);
+        this.projectileLayer.removeChild(visual.graphic);
         visual.graphic.destroy();
         this.projectileVisuals.delete(id);
       }
@@ -455,7 +553,7 @@ export class GameScene {
       graphic.drawCircle(0, 0, 150);
       graphic.x = message.x;
       graphic.y = message.y;
-      this.worldContainer.addChild(graphic);
+      this.projectileLayer.addChild(graphic);
       this.strikeMarkers.push({ x: message.x, y: message.y, graphic, impactAt: performance.now() + 1200 });
     });
 
@@ -466,9 +564,9 @@ export class GameScene {
       flash.endFill();
       flash.x = message.x;
       flash.y = message.y;
-      this.worldContainer.addChild(flash);
+      this.projectileLayer.addChild(flash);
       setTimeout(() => {
-        this.worldContainer.removeChild(flash);
+        this.projectileLayer.removeChild(flash);
         flash.destroy();
       }, 300);
 
@@ -489,8 +587,9 @@ export class GameScene {
       const vehicle = this.room.state.vehicles.get(player.vehicleId) as any;
       if (vehicle) {
         const def = VEHICLES[vehicle.vehicleType as VehicleType];
+        const stationaryNote = def.id === "artillery" ? " (estacionaria)" : "";
         updateHud(
-          `Equipo: ${player.team === "red" ? "Rojo" : "Azul"} — Vehículo: ${def.name} — Nivel ${vehicle.level} — XP ${vehicle.xp}/${vehicleXpRequiredForLevel(vehicle.level)} — HP ${Math.ceil(vehicle.hp)}/${vehicle.maxHp}`
+          `Equipo: ${player.team === "red" ? "Rojo" : "Azul"} — Vehículo: ${def.name}${stationaryNote} — Nivel ${vehicle.level} — XP ${vehicle.xp}/${vehicleXpRequiredForLevel(vehicle.level)} — HP ${Math.ceil(vehicle.hp)}/${vehicle.maxHp}`
         );
         return;
       }
@@ -503,12 +602,25 @@ export class GameScene {
 
   private drawPlayerShape(graphic: PIXI.Graphics, color: number, isLocal: boolean) {
     graphic.clear();
-    if (isLocal) graphic.lineStyle(2, 0xffffff, 1);
+
+    const bodyRadius = PLAYER_RADIUS * 0.8;
+    const barrelColor = shadeColor(color, -0.35);
+
+    // cañón (apunta hacia +x, la rotación del contenedor lo orienta hacia donde apunta el jugador)
+    graphic.beginFill(barrelColor);
+    graphic.drawRoundedRect(0, -bodyRadius * 0.42, PLAYER_RADIUS * 1.5, bodyRadius * 0.84, 3);
+    graphic.endFill();
+
+    // cuerpo
+    graphic.lineStyle(isLocal ? 3 : 2, isLocal ? 0xffffff : shadeColor(color, -0.5), 1);
     graphic.beginFill(color);
-    graphic.moveTo(PLAYER_RADIUS, 0);
-    graphic.lineTo(-PLAYER_RADIUS * 0.7, -PLAYER_RADIUS * 0.7);
-    graphic.lineTo(-PLAYER_RADIUS * 0.7, PLAYER_RADIUS * 0.7);
-    graphic.closePath();
+    graphic.drawCircle(0, 0, bodyRadius);
+    graphic.endFill();
+
+    // brillo sutil
+    graphic.lineStyle(0);
+    graphic.beginFill(0xffffff, 0.14);
+    graphic.drawCircle(-bodyRadius * 0.25, -bodyRadius * 0.25, bodyRadius * 0.35);
     graphic.endFill();
   }
 
@@ -546,18 +658,44 @@ export class GameScene {
   private drawVehicle(visual: VehicleVisual, vehicle: any) {
     const def = VEHICLES[vehicle.vehicleType as VehicleType];
     const color = TEAM_COLORS[vehicle.team] ?? 0xffffff;
+    const dark = shadeColor(color, -0.55);
+    const trackColor = 0x1c1f26;
 
     visual.chassis.clear();
     visual.chassis.alpha = vehicle.destroyed ? 0.25 : 1;
-    visual.chassis.beginFill(color);
-    visual.chassis.drawRoundedRect(-def.radius, -def.radius * 0.65, def.radius * 2, def.radius * 1.3, 6);
-    visual.chassis.endFill();
+
+    if (def.id === "artillery") {
+      // plataforma fija (octágono con base oscura) para remarcar que no se desplaza
+      visual.chassis.beginFill(trackColor);
+      drawRegularPolygon(visual.chassis, 0, 0, def.radius * 1.05, 8);
+      visual.chassis.endFill();
+      visual.chassis.lineStyle(2, dark, 1);
+      visual.chassis.beginFill(color);
+      drawRegularPolygon(visual.chassis, 0, 0, def.radius * 0.78, 8);
+      visual.chassis.endFill();
+    } else {
+      // orugas
+      visual.chassis.beginFill(trackColor);
+      visual.chassis.drawRoundedRect(-def.radius, -def.radius * 0.78, def.radius * 2, def.radius * 0.34, 3);
+      visual.chassis.drawRoundedRect(-def.radius, def.radius * 0.44, def.radius * 2, def.radius * 0.34, 3);
+      visual.chassis.endFill();
+
+      // casco
+      visual.chassis.lineStyle(2, dark, 1);
+      visual.chassis.beginFill(color);
+      visual.chassis.drawRoundedRect(-def.radius, -def.radius * 0.55, def.radius * 2, def.radius * 1.1, 6);
+      visual.chassis.endFill();
+    }
 
     visual.turret.clear();
     visual.turret.visible = !vehicle.destroyed;
     if (def.hasTurret) {
-      visual.turret.beginFill(0x333333);
-      visual.turret.drawRect(0, -4, def.radius * 1.1, 8);
+      visual.turret.lineStyle(0);
+      visual.turret.beginFill(shadeColor(color, -0.2));
+      visual.turret.drawRoundedRect(0, -def.radius * 0.14, def.radius * 1.3, def.radius * 0.28, 2);
+      visual.turret.endFill();
+      visual.turret.beginFill(dark);
+      visual.turret.drawCircle(0, 0, def.radius * 0.42);
       visual.turret.endFill();
       visual.turret.rotation = vehicle.turretRotation;
     }
@@ -578,6 +716,8 @@ export class GameScene {
   }
 
   private sendInput() {
+    if (this.paused) return;
+
     let moveX = 0;
     let moveY = 0;
     if (this.keys.w) moveY -= 1;
@@ -724,4 +864,35 @@ function lerp(a: number, b: number, t: number) {
 
 function clampCoord(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function drawRegularPolygon(g: PIXI.Graphics, cx: number, cy: number, radius: number, sides: number) {
+  const points: number[] = [];
+  for (let i = 0; i < sides; i++) {
+    const angle = (i / sides) * Math.PI * 2 - Math.PI / 2;
+    points.push(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+  }
+  g.drawPolygon(points);
+}
+
+/** Aclara (amount > 0) u oscurece (amount < 0) un color hexadecimal, amount en [-1, 1]. */
+function shadeColor(color: number, amount: number): number {
+  const r = (color >> 16) & 0xff;
+  const g = (color >> 8) & 0xff;
+  const b = color & 0xff;
+  const adjust = (c: number) =>
+    Math.max(0, Math.min(255, Math.round(amount > 0 ? c + (255 - c) * amount : c + c * amount)));
+  return (adjust(r) << 16) | (adjust(g) << 8) | adjust(b);
+}
+
+/** PRNG determinístico (mulberry32) para que las decoraciones del mapa salgan iguales siempre. */
+function createSeededRandom(seed: number) {
+  let a = seed;
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }

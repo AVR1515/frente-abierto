@@ -14,4 +14,5 @@ export class Player extends Schema {
   @type("number") pendingEvolutionLevel = 0;
   @type(["string"]) chosenEvolutions = new ArraySchema<string>();
   @type("number") lastProcessedSeq = 0;
+  @type("boolean") isBot = false;
 }

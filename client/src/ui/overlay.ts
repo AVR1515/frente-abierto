@@ -3,6 +3,108 @@ import { CLASSES, type EvolutionOption } from "shared";
 const overlay = document.getElementById("ui-overlay") as HTMLDivElement;
 const panel = document.getElementById("panel-content") as HTMLDivElement;
 
+export function showMainMenu(onPlay: () => void, onHowToPlay: () => void) {
+  panel.innerHTML = "";
+
+  const brand = document.createElement("div");
+  brand.className = "brand";
+  brand.textContent = "FRENTE ABIERTO";
+  panel.appendChild(brand);
+
+  const tagline = document.createElement("div");
+  tagline.className = "tagline";
+  tagline.textContent = "Shooter táctico por equipos";
+  panel.appendChild(tagline);
+
+  const playBtn = document.createElement("button");
+  playBtn.className = "primary";
+  playBtn.textContent = "Jugar";
+  playBtn.onclick = () => {
+    hideOverlay();
+    onPlay();
+  };
+  panel.appendChild(playBtn);
+
+  const howToBtn = document.createElement("button");
+  howToBtn.className = "secondary";
+  howToBtn.textContent = "Cómo jugar";
+  howToBtn.onclick = onHowToPlay;
+  panel.appendChild(howToBtn);
+
+  const streamerLink = document.createElement("button");
+  streamerLink.className = "secondary";
+  streamerLink.textContent = "Crear sala de streamer";
+  streamerLink.onclick = () => {
+    location.search = "?streamer=1";
+  };
+  panel.appendChild(streamerLink);
+
+  overlay.classList.remove("hidden");
+}
+
+export function showHowToPlay(onBack: () => void) {
+  panel.innerHTML = "";
+  const title = document.createElement("h2");
+  title.textContent = "Cómo jugar";
+  panel.appendChild(title);
+
+  const list = document.createElement("div");
+  list.className = "kbd-list";
+  const rows: [string, string][] = [
+    ["WASD", "Moverse"],
+    ["Mouse", "Apuntar"],
+    ["Clic izq.", "Disparar"],
+    ["E", "Subir / bajar de un vehículo"],
+    ["Esc", "Pausa"],
+  ];
+  rows.forEach(([key, desc]) => {
+    const kbd = document.createElement("kbd");
+    kbd.textContent = key;
+    const span = document.createElement("span");
+    span.textContent = desc;
+    list.appendChild(kbd);
+    list.appendChild(span);
+  });
+  panel.appendChild(list);
+
+  const p = document.createElement("p");
+  p.textContent =
+    "Capturá los puntos de control para hacer bajar los tickets del equipo rival. El equipo con más tickets cuando se acaba el tiempo (o que agota los del rival) gana la partida.";
+  panel.appendChild(p);
+
+  const backBtn = document.createElement("button");
+  backBtn.className = "primary";
+  backBtn.textContent = "Volver";
+  backBtn.onclick = onBack;
+  panel.appendChild(backBtn);
+
+  overlay.classList.remove("hidden");
+}
+
+export function showPauseMenu(onResume: () => void, onLeave: () => void) {
+  panel.innerHTML = "";
+  const title = document.createElement("h2");
+  title.textContent = "Pausa";
+  panel.appendChild(title);
+
+  const resumeBtn = document.createElement("button");
+  resumeBtn.className = "primary";
+  resumeBtn.textContent = "Continuar";
+  resumeBtn.onclick = () => {
+    hideOverlay();
+    onResume();
+  };
+  panel.appendChild(resumeBtn);
+
+  const leaveBtn = document.createElement("button");
+  leaveBtn.className = "danger";
+  leaveBtn.textContent = "Salir de la partida";
+  leaveBtn.onclick = onLeave;
+  panel.appendChild(leaveBtn);
+
+  overlay.classList.remove("hidden");
+}
+
 export function showClassSelect(onPick: (classId: string) => void) {
   panel.innerHTML = "";
   const title = document.createElement("h2");
@@ -176,6 +278,25 @@ export function updateCommanderPanel(commandPoints: number, onSimulateEvent: () 
   btn.onclick = onSimulateEvent;
   el.appendChild(document.createElement("br"));
   el.appendChild(btn);
+}
+
+export function updatePerfPanel(fps: number, pingMs: number | null, counts: { players: number; projectiles: number; vehicles: number }) {
+  const el = document.getElementById("perf-panel")!;
+  el.classList.remove("hidden");
+
+  const fpsClass = fps >= 50 ? "" : fps >= 30 ? "warn" : "bad";
+  const pingClass = pingMs === null ? "" : pingMs <= 80 ? "" : pingMs <= 150 ? "warn" : "bad";
+  const pingText = pingMs === null ? "—" : `${Math.round(pingMs)}ms`;
+
+  el.innerHTML = `
+    <div class="${fpsClass}">FPS: ${Math.round(fps)}</div>
+    <div class="${pingClass}">Ping: ${pingText}</div>
+    <div>Jug: ${counts.players} · Proy: ${counts.projectiles} · Veh: ${counts.vehicles}</div>
+  `;
+}
+
+export function toggleElementHidden(id: string) {
+  document.getElementById(id)?.classList.toggle("hidden");
 }
 
 export function showMatchEnd(winningTeam: string) {

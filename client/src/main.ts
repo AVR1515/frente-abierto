@@ -1,7 +1,15 @@
 import { NetworkManager } from "./net/NetworkManager";
 import { GameScene } from "./scenes/GameScene";
 import { generateRoomCode } from "shared";
-import { showClassSelect, showStreamerSetup, showViewerNamePrompt, showJoinError, showRoomInfo } from "./ui/overlay";
+import {
+  showClassSelect,
+  showStreamerSetup,
+  showViewerNamePrompt,
+  showJoinError,
+  showRoomInfo,
+  showMainMenu,
+  showHowToPlay,
+} from "./ui/overlay";
 
 async function main() {
   const appEl = document.getElementById("app")!;
@@ -44,11 +52,18 @@ async function main() {
     return;
   }
 
-  showClassSelect(async (classId) => {
-    const network = new NetworkManager();
-    const room = await network.connect(classId);
-    new GameScene(room, appEl, { isCommander: false });
-  });
+  const startClassSelect = () => {
+    showClassSelect(async (classId) => {
+      const network = new NetworkManager();
+      const room = await network.connect(classId);
+      new GameScene(room, appEl, { isCommander: false });
+    });
+  };
+
+  const openMainMenu = () => {
+    showMainMenu(startClassSelect, () => showHowToPlay(openMainMenu));
+  };
+  openMainMenu();
 }
 
 main().catch((err) => {

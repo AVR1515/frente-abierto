@@ -4,14 +4,39 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Frente Abierto</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
     <style>
-      html, body {
+      :root {
+        --accent: #ff9800;
+        --accent-2: #4fc3f7;
+        --red: #ef5350;
+        --blue: #42a5f5;
+        --bg-0: #0d0f12;
+        --panel-bg: rgba(18, 20, 24, 0.88);
+        --panel-border: rgba(255, 255, 255, 0.08);
+        --text: #f1f3f5;
+        --text-dim: #9aa1a8;
+        --font-display: "Rajdhani", sans-serif;
+        --font-body: "Inter", sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
         margin: 0;
         padding: 0;
         overflow: hidden;
-        background: #1a1a1a;
+        background: var(--bg-0);
         width: 100%;
         height: 100%;
+        font-family: var(--font-body);
+        color: var(--text);
       }
       #app {
         width: 100vw;
@@ -25,49 +50,136 @@
         align-items: center;
         justify-content: center;
         z-index: 10;
-        font-family: sans-serif;
-        color: white;
+        background: radial-gradient(circle at 50% 30%, rgba(255, 152, 0, 0.06), transparent 60%), rgba(5, 6, 8, 0.55);
+        backdrop-filter: blur(3px);
       }
       #ui-overlay.hidden {
         display: none;
       }
       .panel {
-        background: rgba(20, 20, 20, 0.92);
-        border: 1px solid #444;
-        border-radius: 8px;
-        padding: 24px 32px;
-        min-width: 280px;
+        background: var(--panel-bg);
+        border: 1px solid var(--panel-border);
+        border-radius: 12px;
+        padding: 28px 36px;
+        min-width: 300px;
+        max-width: 420px;
         text-align: center;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        animation: panel-in 0.18s ease-out;
+      }
+      @keyframes panel-in {
+        from {
+          opacity: 0;
+          transform: translateY(8px) scale(0.98);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      .panel .brand {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 34px;
+        letter-spacing: 1px;
+        margin: 0 0 2px;
+        background: linear-gradient(90deg, var(--accent), var(--accent-2));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .panel .tagline {
+        font-size: 12px;
+        color: var(--text-dim);
+        margin: 0 0 22px;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
       }
       .panel h2 {
         margin-top: 0;
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 22px;
+        letter-spacing: 0.3px;
+      }
+      .panel p {
+        color: var(--text-dim);
+        font-size: 13px;
+        line-height: 1.5;
+        text-align: left;
       }
       .panel button {
         display: block;
         width: 100%;
-        margin: 8px 0;
-        padding: 10px;
-        background: #2b2f36;
-        color: white;
-        border: 1px solid #555;
-        border-radius: 4px;
+        margin: 7px 0;
+        padding: 11px;
+        background: #1c1f26;
+        color: var(--text);
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
         cursor: pointer;
         font-size: 14px;
+        font-family: var(--font-body);
+        font-weight: 500;
+        transition: background 0.12s, border-color 0.12s, transform 0.05s;
       }
       .panel button:hover {
-        background: #3d434d;
+        background: #262b34;
+        border-color: rgba(255, 255, 255, 0.18);
+      }
+      .panel button:active {
+        transform: scale(0.985);
+      }
+      .panel button.primary {
+        background: linear-gradient(90deg, var(--accent), #ffb74d);
+        color: #201400;
+        border: none;
+        font-weight: 600;
+      }
+      .panel button.primary:hover {
+        filter: brightness(1.08);
+      }
+      .panel button.secondary {
+        background: transparent;
+      }
+      .panel button.danger {
+        color: var(--red);
+      }
+      .panel .kbd-list {
+        text-align: left;
+        font-size: 13px;
+        color: var(--text-dim);
+        margin: 6px 0 18px;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 6px 12px;
+      }
+      .panel .kbd-list kbd {
+        background: #1c1f26;
+        border: 1px solid var(--panel-border);
+        border-radius: 4px;
+        padding: 2px 7px;
+        font-family: var(--font-body);
+        font-size: 12px;
+        color: var(--text);
       }
       .panel textarea,
       .panel input[type="text"] {
         width: 100%;
         box-sizing: border-box;
         margin: 6px 0;
-        padding: 8px;
+        padding: 9px 10px;
         background: #15171b;
-        color: white;
-        border: 1px solid #555;
-        border-radius: 4px;
+        color: var(--text);
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
         font-family: inherit;
+        font-size: 13px;
+      }
+      .panel textarea:focus,
+      .panel input[type="text"]:focus {
+        outline: none;
+        border-color: var(--accent-2);
       }
       .panel label {
         display: flex;
@@ -76,22 +188,28 @@
         font-size: 13px;
         margin: 6px 0;
         text-align: left;
+        color: var(--text-dim);
       }
       #hud {
         position: fixed;
         left: 16px;
         bottom: 16px;
-        color: white;
-        font-family: sans-serif;
+        font-family: var(--font-body);
+        font-size: 13px;
         z-index: 5;
         text-shadow: 0 1px 2px black;
+        background: rgba(10, 11, 13, 0.55);
+        padding: 6px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--panel-border);
       }
       #minimap {
         position: fixed;
         right: 16px;
         bottom: 16px;
-        background: rgba(0, 0, 0, 0.5);
-        border: 1px solid #555;
+        background: rgba(8, 9, 11, 0.6);
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
         z-index: 5;
       }
       #tickets {
@@ -100,45 +218,52 @@
         left: 50%;
         transform: translateX(-50%);
         z-index: 5;
-        font-family: sans-serif;
-        color: white;
         text-align: center;
         text-shadow: 0 1px 2px black;
         min-width: 320px;
+        background: rgba(10, 11, 13, 0.5);
+        padding: 6px 14px;
+        border-radius: 8px;
+        border: 1px solid var(--panel-border);
+        font-family: var(--font-display);
+        font-weight: 600;
+        letter-spacing: 0.3px;
       }
       #tickets .bars {
         display: flex;
         gap: 4px;
         margin-top: 4px;
-        height: 10px;
+        height: 8px;
       }
       #tickets .bar-red,
       #tickets .bar-blue {
         height: 100%;
-        background: #ef5350;
+        background: var(--red);
+        transition: width 0.2s linear;
       }
       #tickets .bar-blue {
-        background: #42a5f5;
+        background: var(--blue);
       }
       #tickets .bar-bg {
         flex: 1;
-        background: #222;
+        background: #1c1f26;
         position: relative;
         overflow: hidden;
-        border-radius: 2px;
+        border-radius: 4px;
       }
       #vehicle-hint {
         position: fixed;
         left: 50%;
         bottom: 60px;
         transform: translateX(-50%);
-        color: white;
-        font-family: sans-serif;
+        font-family: var(--font-body);
+        font-size: 13px;
         z-index: 5;
         text-shadow: 0 1px 2px black;
-        background: rgba(0, 0, 0, 0.5);
-        padding: 4px 10px;
-        border-radius: 4px;
+        background: rgba(10, 11, 13, 0.65);
+        padding: 6px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--panel-border);
       }
       #vehicle-hint.hidden {
         display: none;
@@ -148,13 +273,12 @@
         top: 16px;
         left: 16px;
         z-index: 5;
-        font-family: sans-serif;
-        color: white;
-        text-shadow: 0 1px 2px black;
-        background: rgba(0, 0, 0, 0.5);
-        padding: 6px 10px;
-        border-radius: 4px;
         font-size: 13px;
+        text-shadow: 0 1px 2px black;
+        background: rgba(10, 11, 13, 0.55);
+        padding: 7px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--panel-border);
       }
       #room-info.hidden {
         display: none;
@@ -162,15 +286,14 @@
       #commander-panel {
         position: fixed;
         right: 16px;
-        top: 16px;
+        top: 60px;
         z-index: 5;
-        font-family: sans-serif;
-        color: white;
-        text-shadow: 0 1px 2px black;
-        background: rgba(0, 0, 0, 0.5);
-        padding: 8px 10px;
-        border-radius: 4px;
         font-size: 13px;
+        text-shadow: 0 1px 2px black;
+        background: rgba(10, 11, 13, 0.55);
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--panel-border);
         text-align: right;
       }
       #commander-panel.hidden {
@@ -179,11 +302,47 @@
       #commander-panel button {
         margin-top: 6px;
         padding: 4px 8px;
-        background: #2b2f36;
-        color: white;
-        border: 1px solid #555;
-        border-radius: 4px;
+        background: #1c1f26;
+        color: var(--text);
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
         cursor: pointer;
+        font-size: 12px;
+      }
+      #perf-panel {
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        z-index: 5;
+        font-family: "SFMono-Regular", Consolas, monospace;
+        font-size: 11px;
+        line-height: 1.5;
+        color: #9be89b;
+        text-shadow: 0 1px 2px black;
+        background: rgba(10, 11, 13, 0.55);
+        padding: 7px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--panel-border);
+        min-width: 92px;
+      }
+      #perf-panel.hidden {
+        display: none;
+      }
+      #perf-panel .warn {
+        color: #ffb74d;
+      }
+      #perf-panel .bad {
+        color: var(--red);
+      }
+      #pause-hint {
+        position: fixed;
+        top: 16px;
+        left: 50%;
+        transform: translateX(-50%) translateY(46px);
+        z-index: 4;
+        font-size: 11px;
+        color: var(--text-dim);
+        text-shadow: 0 1px 2px black;
       }
     </style>
   </head>
@@ -195,6 +354,7 @@
     <div id="vehicle-hint" class="hidden"></div>
     <div id="room-info" class="hidden"></div>
     <div id="commander-panel" class="hidden"></div>
+    <div id="perf-panel" class="hidden"></div>
     <canvas id="minimap" width="160" height="160"></canvas>
     <script type="module" src="/src/main.ts"></script>
   </body>

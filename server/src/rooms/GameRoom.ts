@@ -39,7 +39,15 @@ import {
   VehicleType,
   MAX_PLAYERS_PER_ROOM,
   MAX_PROJECTILES_PER_ROOM,
+  BOT_TARGET_PER_TEAM,
+  BOT_DETECTION_RADIUS,
+  BOT_PREFERRED_DISTANCE,
+  BOT_AIM_JITTER_RAD,
+  BOT_DECISION_INTERVAL_MS,
+  BOT_STRAFE_CHANGE_MS,
 } from "shared";
+
+const BOT_CLASS_IDS = Object.keys(CLASSES);
 
 interface PlayerInput {
   moveX: number;
@@ -57,6 +65,13 @@ export class GameRoom extends Room<RoomState> {
   private projectileSeq = 0;
   private playerGrid = new SpatialGrid<Player>();
   private vehicleGrid = new SpatialGrid<Vehicle>();
+
+  private bots = new Set<string>();
+  private botSeq = 0;
+  private botStrafeSign = new Map<string, number>();
+  private botNextStrafeAt = new Map<string, number>();
+  private botNextDecisionAt = new Map<string, number>();
+  private botDecision = new Map<string, { moveX: number; moveY: number; angle: number }>();
 
   onCreate(_options?: any) {
     this.setState(new RoomState());
@@ -100,7 +115,7 @@ export class GameRoom extends Room<RoomState> {
     });
 
     this.onMessage("shoot", (client, message: { angle: number }) => {
-      this.handleShoot(client, message.angle);
+      this.handleShootFor(client.sessionId, message.angle);
     });
 
     this.onMessage("evolve", (client, message: { optionId: string }) => {
@@ -123,7 +138,14 @@ export class GameRoom extends Room<RoomState> {
       this.handleVehicleEvolve(client, message.optionId);
     });
 
+    // panel de rendimiento del cliente: ida y vuelta para medir ping
+    this.onMessage("ping", (client, message: { t: number }) => {
+      client.send("pong", message);
+    });
+
     this.setSimulationInterval((deltaTime) => this.update(deltaTime), 1000 / TICK_RATE_HZ);
+
+    this.rebalanceBots();
 
     console.log("GameRoom creada");
   }
@@ -140,6 +162,8 @@ export class GameRoom extends Room<RoomState> {
 
     this.state.players.set(client.sessionId, player);
     console.log(`${client.sessionId} se unió al equipo ${player.team}`);
+
+    this.rebalanceBots();
   }
 
   onLeave(client: Client) {
@@ -152,6 +176,8 @@ export class GameRoom extends Room<RoomState> {
     this.state.players.delete(client.sessionId);
     this.lastInputs.delete(client.sessionId);
     this.lastShotAt.delete(client.sessionId);
+
+    this.rebalanceBots();
   }
 
   private pickBalancedTeam(): TeamId {
@@ -170,22 +196,151 @@ export class GameRoom extends Room<RoomState> {
     player.y = clamp(spawn.y + (Math.random() - 0.5) * 120, PLAYER_RADIUS, MAP_HEIGHT - PLAYER_RADIUS);
   }
 
+  // ---------- Bots ----------
+
+  /** Mantiene un mínimo de jugadores (reales + bots) por equipo, para que el servidor nunca se sienta vacío. */
+  private rebalanceBots() {
+    (["red", "blue"] as TeamId[]).forEach((team) => {
+      let real = 0;
+      const botIds: string[] = [];
+      this.state.players.forEach((player, sessionId) => {
+        if (player.team !== team) return;
+        if (player.isBot) botIds.push(sessionId);
+        else real++;
+      });
+
+      const desiredBots = Math.max(0, BOT_TARGET_PER_TEAM - real);
+      if (botIds.length < desiredBots) {
+        for (let i = botIds.length; i < desiredBots; i++) this.spawnBot(team);
+      } else if (botIds.length > desiredBots) {
+        const excess = botIds.length - desiredBots;
+        for (let i = 0; i < excess; i++) this.removeBot(botIds[i]);
+      }
+    });
+  }
+
+  private spawnBot(team: TeamId) {
+    const botId = `bot_${this.botSeq++}`;
+    const player = new Player();
+    player.isBot = true;
+    player.team = team;
+    player.classId = BOT_CLASS_IDS[Math.floor(Math.random() * BOT_CLASS_IDS.length)];
+
+    const stats = getEffectiveStats(player.classId, []);
+    player.maxHp = stats.maxHp;
+    player.hp = stats.maxHp;
+    this.placeAtTeamSpawn(player);
+
+    this.state.players.set(botId, player);
+    this.bots.add(botId);
+  }
+
+  private removeBot(botId: string) {
+    this.state.vehicles.forEach((vehicle) => {
+      if (vehicle.driverSessionId === botId) vehicle.driverSessionId = "";
+    });
+
+    this.state.players.delete(botId);
+    this.bots.delete(botId);
+    this.lastInputs.delete(botId);
+    this.lastShotAt.delete(botId);
+    this.botStrafeSign.delete(botId);
+    this.botNextStrafeAt.delete(botId);
+    this.botNextDecisionAt.delete(botId);
+    this.botDecision.delete(botId);
+  }
+
+  private updateBots(dt: number, now: number) {
+    this.bots.forEach((botId) => {
+      const bot = this.state.players.get(botId);
+      if (!bot || bot.hp <= 0) return;
+
+      if ((this.botNextDecisionAt.get(botId) ?? 0) <= now) {
+        this.botNextDecisionAt.set(botId, now + BOT_DECISION_INTERVAL_MS);
+        this.decideBotAction(botId, bot, now);
+      }
+
+      const decision = this.botDecision.get(botId);
+      if (decision) this.lastInputs.set(botId, decision);
+    });
+  }
+
+  private decideBotAction(botId: string, bot: Player, now: number) {
+    let nearestEnemy: { x: number; y: number } | null = null;
+    let nearestDist = BOT_DETECTION_RADIUS;
+
+    this.state.players.forEach((other, otherId) => {
+      if (otherId === botId || other.team === bot.team || other.hp <= 0 || other.vehicleId) return;
+      const dist = Math.hypot(other.x - bot.x, other.y - bot.y);
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearestEnemy = other;
+      }
+    });
+
+    if (nearestEnemy) {
+      const target = nearestEnemy as { x: number; y: number };
+      const angleToTarget = Math.atan2(target.y - bot.y, target.x - bot.x);
+      const aimAngle = angleToTarget + (Math.random() - 0.5) * 2 * BOT_AIM_JITTER_RAD;
+
+      if ((this.botNextStrafeAt.get(botId) ?? 0) <= now) {
+        this.botNextStrafeAt.set(botId, now + BOT_STRAFE_CHANGE_MS);
+        this.botStrafeSign.set(botId, Math.random() < 0.5 ? -1 : 1);
+      }
+      const strafeSign = this.botStrafeSign.get(botId) ?? 1;
+      const perpAngle = angleToTarget + (Math.PI / 2) * strafeSign;
+
+      let moveAngle: number;
+      if (nearestDist > BOT_PREFERRED_DISTANCE + 60) {
+        moveAngle = angleToTarget; // se acerca
+      } else if (nearestDist < BOT_PREFERRED_DISTANCE - 60) {
+        moveAngle = angleToTarget + Math.PI; // se aleja
+      } else {
+        moveAngle = perpAngle; // rodea al objetivo
+      }
+
+      this.botDecision.set(botId, { moveX: Math.cos(moveAngle), moveY: Math.sin(moveAngle), angle: aimAngle });
+      this.handleShootFor(botId, aimAngle);
+      return;
+    }
+
+    // sin enemigos cerca: avanzar hacia el punto de control disputable más cercano
+    let targetPoint = { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 };
+    let nearestPointDist = Infinity;
+    this.state.controlPoints.forEach((cp) => {
+      if (cp.ownerTeam === bot.team) return;
+      const dist = Math.hypot(cp.x - bot.x, cp.y - bot.y);
+      if (dist < nearestPointDist) {
+        nearestPointDist = dist;
+        targetPoint = { x: cp.x, y: cp.y };
+      }
+    });
+
+    const angleToPoint = Math.atan2(targetPoint.y - bot.y, targetPoint.x - bot.x);
+    const closeToTarget = nearestPointDist < 60;
+    this.botDecision.set(botId, {
+      moveX: closeToTarget ? 0 : Math.cos(angleToPoint),
+      moveY: closeToTarget ? 0 : Math.sin(angleToPoint),
+      angle: angleToPoint,
+    });
+  }
+
   // ---------- Combate a pie ----------
 
-  private handleShoot(client: Client, angle: number) {
-    const player = this.state.players.get(client.sessionId);
+  private handleShootFor(sessionId: string, angle: number) {
+    const player = this.state.players.get(sessionId);
     if (!player || player.hp <= 0 || player.vehicleId || this.state.matchEnded) return;
 
     if (this.state.projectiles.size >= MAX_PROJECTILES_PER_ROOM) return;
 
     const stats = getEffectiveStats(player.classId, Array.from(player.chosenEvolutions) as string[]);
     const now = Date.now();
-    const last = this.lastShotAt.get(client.sessionId) ?? 0;
+    const last = this.lastShotAt.get(sessionId) ?? 0;
     if (now - last < stats.weaponCooldownMs) return;
-    this.lastShotAt.set(client.sessionId, now);
+    this.lastShotAt.set(sessionId, now);
 
     const projectile = new Projectile();
-    projectile.ownerId = client.sessionId;
+    projectile.ownerId = sessionId;
     projectile.ownerType = "player";
     projectile.x = player.x + Math.cos(angle) * (PLAYER_RADIUS + PROJECTILE_RADIUS);
     projectile.y = player.y + Math.sin(angle) * (PLAYER_RADIUS + PROJECTILE_RADIUS);
@@ -388,6 +543,8 @@ export class GameRoom extends Room<RoomState> {
     if (this.state.matchEnded) return;
 
     const dt = deltaTime / 1000;
+
+    this.updateBots(dt, Date.now());
 
     this.state.players.forEach((player, sessionId) => {
       if (player.hp <= 0 || player.vehicleId) return;
