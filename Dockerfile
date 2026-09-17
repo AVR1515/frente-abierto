@@ -18,7 +18,7 @@ RUN npm install
 
 COPY shared ./shared
 COPY server ./server
-RUN npm run build --workspace server
+RUN npm run build --workspace shared && npm run build --workspace server
 
 FROM node:20-alpine
 WORKDIR /app
