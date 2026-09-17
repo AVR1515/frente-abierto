@@ -14,11 +14,13 @@ import {
   PROJECTILE_LIFETIME_MS,
   DEATH_LEVEL_PENALTY,
   InputMessage,
-  CLASSES,
+  BASE_NAME,
+  getDisplayName,
   XP_PER_KILL,
   xpRequiredForLevel,
   getEffectiveStats,
   findEvolutionChoice,
+  findEvolutionOptionLevel,
   CONTROL_POINTS,
   TEAM_SPAWNS,
   STARTING_TICKETS,
@@ -46,8 +48,6 @@ import {
   BOT_DECISION_INTERVAL_MS,
   BOT_STRAFE_CHANGE_MS,
 } from "shared";
-
-const BOT_CLASS_IDS = Object.keys(CLASSES);
 
 interface PlayerInput {
   moveX: number;
@@ -119,7 +119,7 @@ export class GameRoom extends Room<RoomState> {
     });
 
     this.onMessage("evolve", (client, message: { optionId: string }) => {
-      this.handleEvolve(client, message.optionId);
+      this.handleEvolve(client.sessionId, message.optionId);
     });
 
     this.onMessage("enterVehicle", (client, message: { vehicleId: string }) => {
@@ -150,12 +150,12 @@ export class GameRoom extends Room<RoomState> {
     console.log("GameRoom creada");
   }
 
-  onJoin(client: Client, options: { classId?: string }) {
+  onJoin(client: Client, _options?: unknown) {
     const player = new Player();
-    player.classId = options?.classId && CLASSES[options.classId] ? options.classId : "assault";
+    player.classId = BASE_NAME; // todos arrancan como Recluta; la clase se elige jugando (progresión diep.io)
     player.team = this.pickBalancedTeam();
 
-    const stats = getEffectiveStats(player.classId, []);
+    const stats = getEffectiveStats([], player.level);
     player.maxHp = stats.maxHp;
     player.hp = stats.maxHp;
     this.placeAtTeamSpawn(player);
@@ -224,9 +224,9 @@ export class GameRoom extends Room<RoomState> {
     const player = new Player();
     player.isBot = true;
     player.team = team;
-    player.classId = BOT_CLASS_IDS[Math.floor(Math.random() * BOT_CLASS_IDS.length)];
+    player.classId = BASE_NAME;
 
-    const stats = getEffectiveStats(player.classId, []);
+    const stats = getEffectiveStats([], player.level);
     player.maxHp = stats.maxHp;
     player.hp = stats.maxHp;
     this.placeAtTeamSpawn(player);
@@ -254,6 +254,16 @@ export class GameRoom extends Room<RoomState> {
     this.bots.forEach((botId) => {
       const bot = this.state.players.get(botId);
       if (!bot || bot.hp <= 0) return;
+
+      if (bot.pendingEvolutionLevel !== 0) {
+        const choice = findEvolutionChoice(Array.from(bot.chosenEvolutions) as string[], bot.pendingEvolutionLevel);
+        if (choice) {
+          const option = choice.options[Math.floor(Math.random() * choice.options.length)];
+          this.handleEvolve(botId, option.id);
+        } else {
+          bot.pendingEvolutionLevel = 0;
+        }
+      }
 
       if ((this.botNextDecisionAt.get(botId) ?? 0) <= now) {
         this.botNextDecisionAt.set(botId, now + BOT_DECISION_INTERVAL_MS);
@@ -333,7 +343,7 @@ export class GameRoom extends Room<RoomState> {
 
     if (this.state.projectiles.size >= MAX_PROJECTILES_PER_ROOM) return;
 
-    const stats = getEffectiveStats(player.classId, Array.from(player.chosenEvolutions) as string[], player.level);
+    const stats = getEffectiveStats(Array.from(player.chosenEvolutions) as string[], player.level);
     const now = Date.now();
     const last = this.lastShotAt.get(sessionId) ?? 0;
     if (now - last < stats.weaponCooldownMs) return;
@@ -352,27 +362,28 @@ export class GameRoom extends Room<RoomState> {
     this.state.projectiles.set(`p${this.projectileSeq++}`, projectile);
   }
 
-  private handleEvolve(client: Client, optionId: string) {
-    const player = this.state.players.get(client.sessionId);
+  private handleEvolve(sessionId: string, optionId: string) {
+    const player = this.state.players.get(sessionId);
     if (!player || player.pendingEvolutionLevel === 0) return;
 
-    const choice = findEvolutionChoice(player.classId, player.pendingEvolutionLevel);
+    const choice = findEvolutionChoice(Array.from(player.chosenEvolutions) as string[], player.pendingEvolutionLevel);
     if (!choice) {
       player.pendingEvolutionLevel = 0;
       return;
     }
 
     const option = choice.options.find((o) => o.id === optionId);
-    if (!option) return; // opción inválida para esta clase/nivel, se ignora
+    if (!option) return; // opción inválida para este nivel, se ignora
 
     player.chosenEvolutions.push(option.id);
+    player.classId = getDisplayName(Array.from(player.chosenEvolutions) as string[]);
     player.pendingEvolutionLevel = 0;
     this.applyStatsToPlayer(player);
     this.tryLevelUp(player);
   }
 
   private applyStatsToPlayer(player: Player) {
-    const stats = getEffectiveStats(player.classId, Array.from(player.chosenEvolutions) as string[], player.level);
+    const stats = getEffectiveStats(Array.from(player.chosenEvolutions) as string[], player.level);
     if (stats.maxHp > player.maxHp) {
       player.hp += stats.maxHp - player.maxHp;
     }
@@ -387,7 +398,7 @@ export class GameRoom extends Room<RoomState> {
       player.xp -= xpRequiredForLevel(player.level);
       player.level += 1;
 
-      const choice = findEvolutionChoice(player.classId, player.level);
+      const choice = findEvolutionChoice(Array.from(player.chosenEvolutions) as string[], player.level);
       if (choice) {
         player.pendingEvolutionLevel = player.level;
         return;
@@ -551,7 +562,7 @@ export class GameRoom extends Room<RoomState> {
       const input = this.lastInputs.get(sessionId);
       if (!input) return;
 
-      const stats = getEffectiveStats(player.classId, Array.from(player.chosenEvolutions) as string[], player.level);
+      const stats = getEffectiveStats(Array.from(player.chosenEvolutions) as string[], player.level);
       const magnitude = Math.min(1, Math.hypot(input.moveX, input.moveY));
       const moveAngle = Math.atan2(input.moveY, input.moveX);
       const dx = Math.cos(moveAngle) * magnitude * stats.speed * dt;
@@ -820,12 +831,12 @@ export class GameRoom extends Room<RoomState> {
 
     // conservar solo las evoluciones cuyo umbral de nivel sigue alcanzado
     const kept = (Array.from(player.chosenEvolutions) as string[]).filter((evoId) => {
-      const def = CLASSES[player.classId];
-      const choice = def.evolutions.find((e) => e.options.some((o) => o.id === evoId));
-      return choice ? choice.level <= player.level : false;
+      const evoLevel = findEvolutionOptionLevel(evoId);
+      return evoLevel !== undefined && evoLevel <= player.level;
     });
     player.chosenEvolutions.clear();
     kept.forEach((id) => player.chosenEvolutions.push(id));
+    player.classId = getDisplayName(kept);
 
     this.applyStatsToPlayer(player);
     player.hp = player.maxHp;

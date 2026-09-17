@@ -6,7 +6,7 @@ import {
   MAP_HEIGHT,
   PLAYER_RADIUS,
   PROJECTILE_RADIUS,
-  CLASSES,
+  getDisplayName,
   findEvolutionChoice,
   xpRequiredForLevel,
   STARTING_TICKETS,
@@ -83,6 +83,7 @@ interface VehicleVisual {
 const MIN_INTERP_MS = 1000 / 30;
 const MAX_INTERP_MS = 400;
 const DEFAULT_INTERP_MS = 100;
+const RECONCILE_THRESHOLD_SQ = 6 * 6; // px al cuadrado: por debajo de esto no se corrige la predicción local
 const TEAM_COLORS: Record<string, number> = { red: 0xef5350, blue: 0x42a5f5, neutral: 0x9e9e9e };
 
 export class GameScene {
@@ -492,7 +493,7 @@ export class GameScene {
 
           if (player.pendingEvolutionLevel !== 0 && this.evolutionPromptShownForLevel !== player.pendingEvolutionLevel) {
             this.evolutionPromptShownForLevel = player.pendingEvolutionLevel;
-            const choice = findEvolutionChoice(player.classId, player.pendingEvolutionLevel);
+            const choice = findEvolutionChoice(Array.from(player.chosenEvolutions) as string[], player.pendingEvolutionLevel);
             if (choice) {
               showEvolutionChoice(choice.options, (optionId) => {
                 this.room.send("evolve", { optionId });
@@ -642,7 +643,7 @@ export class GameScene {
     }
 
     updateHud(
-      `Equipo: ${player.team === "red" ? "Rojo" : "Azul"} — Clase: ${CLASSES[player.classId]?.name ?? player.classId} — Nivel ${player.level} — XP ${player.xp}/${xpRequiredForLevel(player.level)} — HP ${player.hp}/${player.maxHp}`
+      `Equipo: ${player.team === "red" ? "Rojo" : "Azul"} — Clase: ${getDisplayName(Array.from(player.chosenEvolutions) as string[])} — Nivel ${player.level} — XP ${player.xp}/${xpRequiredForLevel(player.level)} — HP ${player.hp}/${player.maxHp}`
     );
   }
 
@@ -797,7 +798,7 @@ export class GameScene {
     const player = this.room.state.players.get(this.localSessionId) as any;
     if (!player) return;
 
-    const stats = getEffectiveStats(player.classId, Array.from(player.chosenEvolutions) as string[], player.level);
+    const stats = getEffectiveStats(Array.from(player.chosenEvolutions) as string[], player.level);
     const magnitude = Math.min(1, Math.hypot(moveX, moveY));
     const angle = Math.atan2(moveY, moveX);
     const dx = Math.cos(angle) * magnitude * stats.speed * dt;
@@ -812,6 +813,14 @@ export class GameScene {
     if (player.vehicleId) return;
 
     this.pendingInputs = this.pendingInputs.filter((input) => input.seq > player.lastProcessedSeq);
+
+    // El servidor confirma la posición decenas de veces por segundo (cada input
+    // procesado). Si corrigiéramos la predicción cada vez que llega una confirmación,
+    // por más que la diferencia sea de 1-2px, el jugador local tiembla en vez de
+    // sentirse fluido. Solo re-sincronizamos si la predicción divergió de verdad
+    // (por ejemplo, tras un choque con el borde del mapa o una desincronización real).
+    const errorSq = (player.x - this.predictedX) ** 2 + (player.y - this.predictedY) ** 2;
+    if (errorSq < RECONCILE_THRESHOLD_SQ) return;
 
     this.predictedX = player.x;
     this.predictedY = player.y;

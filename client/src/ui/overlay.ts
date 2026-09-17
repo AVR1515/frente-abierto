@@ -1,4 +1,4 @@
-import { CLASSES, type EvolutionOption } from "shared";
+import type { EvolutionOption } from "shared";
 
 const overlay = document.getElementById("ui-overlay") as HTMLDivElement;
 const panel = document.getElementById("panel-content") as HTMLDivElement;
@@ -114,22 +114,18 @@ export function showPauseMenu(onResume: () => void, onLeave: () => void) {
   overlay.classList.remove("hidden");
 }
 
-export function showClassSelect(onPick: (classId: string) => void) {
+export function showConnecting(message = "Conectando...") {
   panel.innerHTML = "";
   panel.className = "panel";
   const title = document.createElement("h2");
-  title.textContent = "Elegí tu clase";
+  title.textContent = message;
   panel.appendChild(title);
 
-  Object.values(CLASSES).forEach((def) => {
-    const btn = document.createElement("button");
-    btn.textContent = `${def.name} (HP ${def.baseStats.maxHp}, Vel ${def.baseStats.speed})`;
-    btn.onclick = () => {
-      hideOverlay();
-      onPick(def.id);
-    };
-    panel.appendChild(btn);
-  });
+  const hint = document.createElement("p");
+  hint.style.fontSize = "13px";
+  hint.style.opacity = "0.8";
+  hint.textContent = "El servidor puede tardar unos segundos en despertar si nadie jugó recientemente.";
+  panel.appendChild(hint);
 
   overlay.classList.remove("hidden");
 }

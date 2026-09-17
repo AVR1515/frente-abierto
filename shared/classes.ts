@@ -10,6 +10,10 @@ export interface EvolutionOption {
   id: string;
   label: string;
   statModifiers: Partial<ClassStats>;
+  /** Si esta opción define una rama (nivel 3), el nombre que se muestra en el HUD. */
+  name?: string;
+  /** Sub-opciones que se habilitan en el siguiente umbral, solo si se eligió esta. */
+  next?: EvolutionOption[];
 }
 
 export interface LevelUpChoice {
@@ -17,120 +21,77 @@ export interface LevelUpChoice {
   options: EvolutionOption[];
 }
 
-export interface ClassDefinition {
-  id: string;
-  name: string;
-  baseStats: ClassStats;
-  evolutions: LevelUpChoice[];
-}
+// Sistema de progresión estilo diep.io: no hay selección de clase antes de
+// jugar. Todos arrancan como Recluta con stats neutras, y en los umbrales de
+// nivel el jugador elige cómo especializarse — cada elección abre las
+// siguientes, formando un árbol en vez de una clase fija de entrada.
+export const BASE_NAME = "Recluta";
 
-export const CLASSES: Record<string, ClassDefinition> = {
-  assault: {
-    id: "assault",
-    name: "Asalto",
-    baseStats: { maxHp: 100, speed: 165, weaponCooldownMs: 300, projectileDamage: 12, projectileSpeed: 700 },
-    evolutions: [
-      {
-        level: 3,
-        options: [
-          { id: "assault_rof", label: "Más cadencia de fuego", statModifiers: { weaponCooldownMs: -100 } },
-          { id: "assault_shotgun", label: "Escopeta de área", statModifiers: { projectileDamage: 6, weaponCooldownMs: 150 } },
-        ],
-      },
-      {
-        level: 5,
-        options: [
-          { id: "assault_hp", label: "Chaleco reforzado", statModifiers: { maxHp: 40 } },
-          { id: "assault_speed", label: "Botas ligeras", statModifiers: { speed: 40 } },
-        ],
-      },
-    ],
-  },
-  engineer: {
-    id: "engineer",
-    name: "Ingeniero",
-    baseStats: { maxHp: 110, speed: 150, weaponCooldownMs: 400, projectileDamage: 10, projectileSpeed: 650 },
-    evolutions: [
-      {
-        level: 3,
-        options: [
-          { id: "engineer_armor", label: "Blindaje personal", statModifiers: { maxHp: 30 } },
-          { id: "engineer_repair", label: "Kit de reparación mejorado", statModifiers: {} },
-        ],
-      },
-      {
-        level: 5,
-        options: [
-          { id: "engineer_dmg", label: "Munición perforante", statModifiers: { projectileDamage: 6 } },
-          { id: "engineer_speed", label: "Mochila liviana", statModifiers: { speed: 30 } },
-        ],
-      },
-    ],
-  },
-  sniper: {
-    id: "sniper",
-    name: "Francotirador",
-    baseStats: { maxHp: 80, speed: 150, weaponCooldownMs: 900, projectileDamage: 45, projectileSpeed: 1100 },
-    evolutions: [
-      {
-        level: 3,
-        options: [
-          { id: "sniper_dmg", label: "Munición de alto calibre", statModifiers: { projectileDamage: 20 } },
-          { id: "sniper_rof", label: "Cerrojo rápido", statModifiers: { weaponCooldownMs: -200 } },
-        ],
-      },
-      {
-        level: 5,
-        options: [
-          { id: "sniper_hp", label: "Camuflaje reforzado", statModifiers: { maxHp: 25 } },
-          { id: "sniper_speed", label: "Movilidad táctica", statModifiers: { speed: 30 } },
-        ],
-      },
-    ],
-  },
-  medic: {
-    id: "medic",
-    name: "Médico",
-    baseStats: { maxHp: 90, speed: 175, weaponCooldownMs: 500, projectileDamage: 8, projectileSpeed: 650 },
-    evolutions: [
-      {
-        level: 3,
-        options: [
-          { id: "medic_heal", label: "Botiquín mejorado", statModifiers: {} },
-          { id: "medic_speed", label: "Piernas rápidas", statModifiers: { speed: 40 } },
-        ],
-      },
-      {
-        level: 5,
-        options: [
-          { id: "medic_hp", label: "Resistencia de campo", statModifiers: { maxHp: 30 } },
-          { id: "medic_dmg", label: "Pistola reforzada", statModifiers: { projectileDamage: 6 } },
-        ],
-      },
-    ],
-  },
-  pilot: {
-    id: "pilot",
-    name: "Piloto",
-    baseStats: { maxHp: 85, speed: 180, weaponCooldownMs: 350, projectileDamage: 10, projectileSpeed: 700 },
-    evolutions: [
-      {
-        level: 3,
-        options: [
-          { id: "pilot_speed", label: "Reflejos de piloto", statModifiers: { speed: 40 } },
-          { id: "pilot_hp", label: "Traje reforzado", statModifiers: { maxHp: 25 } },
-        ],
-      },
-      {
-        level: 5,
-        options: [
-          { id: "pilot_dmg", label: "Pistola de servicio mejorada", statModifiers: { projectileDamage: 8 } },
-          { id: "pilot_rof", label: "Mano firme", statModifiers: { weaponCooldownMs: -80 } },
-        ],
-      },
-    ],
-  },
+export const BASE_STATS: ClassStats = {
+  maxHp: 95,
+  speed: 175,
+  weaponCooldownMs: 350,
+  projectileDamage: 10,
+  projectileSpeed: 700,
 };
+
+export const EVOLUTION_LEVELS: LevelUpChoice[] = [
+  {
+    level: 3,
+    options: [
+      {
+        id: "branch_assault",
+        name: "Asalto",
+        label: "Asalto — más cadencia y daño de fuego",
+        statModifiers: { maxHp: 5, weaponCooldownMs: -60, projectileDamage: 3 },
+        next: [
+          { id: "assault_rof", label: "Más cadencia de fuego", statModifiers: { weaponCooldownMs: -80 } },
+          { id: "assault_shotgun", label: "Escopeta de área", statModifiers: { projectileDamage: 6, weaponCooldownMs: 100 } },
+        ],
+      },
+      {
+        id: "branch_engineer",
+        name: "Ingeniero",
+        label: "Ingeniero — más resistencia",
+        statModifiers: { maxHp: 20, speed: -15, weaponCooldownMs: 20 },
+        next: [
+          { id: "engineer_armor", label: "Blindaje personal", statModifiers: { maxHp: 30 } },
+          { id: "engineer_dmg", label: "Munición perforante", statModifiers: { projectileDamage: 6 } },
+        ],
+      },
+      {
+        id: "branch_sniper",
+        name: "Francotirador",
+        label: "Francotirador — alto daño a distancia",
+        statModifiers: { projectileDamage: 30, projectileSpeed: 350, weaponCooldownMs: 400, speed: -20 },
+        next: [
+          { id: "sniper_dmg", label: "Munición de alto calibre", statModifiers: { projectileDamage: 20 } },
+          { id: "sniper_rof", label: "Cerrojo rápido", statModifiers: { weaponCooldownMs: -150 } },
+        ],
+      },
+      {
+        id: "branch_medic",
+        name: "Médico",
+        label: "Médico — soporte y velocidad",
+        statModifiers: { maxHp: 5, speed: 10, weaponCooldownMs: 80, projectileDamage: -3 },
+        next: [
+          { id: "medic_hp", label: "Resistencia de campo", statModifiers: { maxHp: 25 } },
+          { id: "medic_speed", label: "Piernas rápidas", statModifiers: { speed: 25 } },
+        ],
+      },
+      {
+        id: "branch_pilot",
+        name: "Piloto",
+        label: "Piloto — velocidad y maniobra",
+        statModifiers: { speed: 20, weaponCooldownMs: -10 },
+        next: [
+          { id: "pilot_dmg", label: "Pistola de servicio mejorada", statModifiers: { projectileDamage: 6 } },
+          { id: "pilot_rof", label: "Mano firme", statModifiers: { weaponCooldownMs: -60 } },
+        ],
+      },
+    ],
+  },
+];
 
 export const XP_PER_KILL = 60;
 
@@ -140,25 +101,16 @@ export function xpRequiredForLevel(level: number): number {
 
 export const STAT_GROWTH_MAX_LEVEL = 10; // a partir de este nivel la progresión natural deja de crecer
 
-export function getEffectiveStats(classId: string, chosenEvolutionIds: string[], level = 1): ClassStats {
-  const def = CLASSES[classId] ?? CLASSES.assault;
-  const stats: ClassStats = { ...def.baseStats };
+export function getEffectiveStats(chosenEvolutionIds: string[], level = 1): ClassStats {
+  const stats: ClassStats = { ...BASE_STATS };
 
   // progresión gradual por nivel, estilo diep.io: empezás chico y lento, y creces de a poco
-  // en vez de tener todo el poder desde el nivel 1. Las evoluciones elegidas se suman aparte.
   const growthSteps = Math.min(level, STAT_GROWTH_MAX_LEVEL) - 1;
   stats.maxHp *= 1 + growthSteps * 0.05;
   stats.speed *= 1 + growthSteps * 0.02;
   stats.projectileDamage *= 1 + growthSteps * 0.04;
 
-  for (const choice of def.evolutions) {
-    for (const option of choice.options) {
-      if (!chosenEvolutionIds.includes(option.id)) continue;
-      for (const key of Object.keys(option.statModifiers) as (keyof ClassStats)[]) {
-        stats[key] += option.statModifiers[key] ?? 0;
-      }
-    }
-  }
+  applyChosenModifiers(EVOLUTION_LEVELS[0].options, chosenEvolutionIds, stats);
 
   stats.weaponCooldownMs = Math.max(80, stats.weaponCooldownMs);
   stats.maxHp = Math.round(stats.maxHp);
@@ -167,6 +119,36 @@ export function getEffectiveStats(classId: string, chosenEvolutionIds: string[],
   return stats;
 }
 
-export function findEvolutionChoice(classId: string, level: number): LevelUpChoice | undefined {
-  return CLASSES[classId]?.evolutions.find((e) => e.level === level);
+function applyChosenModifiers(options: EvolutionOption[], chosenEvolutionIds: string[], stats: ClassStats) {
+  for (const option of options) {
+    if (!chosenEvolutionIds.includes(option.id)) continue;
+    for (const key of Object.keys(option.statModifiers) as (keyof ClassStats)[]) {
+      stats[key] += option.statModifiers[key] ?? 0;
+    }
+    if (option.next) applyChosenModifiers(option.next, chosenEvolutionIds, stats);
+  }
+}
+
+/** Encuentra las opciones disponibles para el próximo umbral de nivel, según lo ya elegido. */
+export function findEvolutionChoice(chosenEvolutionIds: string[], level: number): LevelUpChoice | undefined {
+  if (level === 3) return EVOLUTION_LEVELS[0];
+
+  const rootChosen = EVOLUTION_LEVELS[0].options.find((o) => chosenEvolutionIds.includes(o.id));
+  if (!rootChosen?.next) return undefined;
+  return { level, options: rootChosen.next };
+}
+
+/** Nombre de clase a mostrar en el HUD, según la rama elegida (o "Recluta" si todavía no eligió). */
+export function getDisplayName(chosenEvolutionIds: string[]): string {
+  const rootChosen = EVOLUTION_LEVELS[0].options.find((o) => chosenEvolutionIds.includes(o.id));
+  return rootChosen?.name ?? BASE_NAME;
+}
+
+/** A qué nivel pertenece una evolución elegida (para saber si sigue siendo válida tras bajar de nivel al morir). */
+export function findEvolutionOptionLevel(evolutionId: string): number | undefined {
+  for (const option of EVOLUTION_LEVELS[0].options) {
+    if (option.id === evolutionId) return 3;
+    if (option.next?.some((n) => n.id === evolutionId)) return 5;
+  }
+  return undefined;
 }
