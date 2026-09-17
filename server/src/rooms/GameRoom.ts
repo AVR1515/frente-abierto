@@ -333,7 +333,7 @@ export class GameRoom extends Room<RoomState> {
 
     if (this.state.projectiles.size >= MAX_PROJECTILES_PER_ROOM) return;
 
-    const stats = getEffectiveStats(player.classId, Array.from(player.chosenEvolutions) as string[]);
+    const stats = getEffectiveStats(player.classId, Array.from(player.chosenEvolutions) as string[], player.level);
     const now = Date.now();
     const last = this.lastShotAt.get(sessionId) ?? 0;
     if (now - last < stats.weaponCooldownMs) return;
@@ -372,7 +372,7 @@ export class GameRoom extends Room<RoomState> {
   }
 
   private applyStatsToPlayer(player: Player) {
-    const stats = getEffectiveStats(player.classId, Array.from(player.chosenEvolutions) as string[]);
+    const stats = getEffectiveStats(player.classId, Array.from(player.chosenEvolutions) as string[], player.level);
     if (stats.maxHp > player.maxHp) {
       player.hp += stats.maxHp - player.maxHp;
     }
@@ -551,7 +551,7 @@ export class GameRoom extends Room<RoomState> {
       const input = this.lastInputs.get(sessionId);
       if (!input) return;
 
-      const stats = getEffectiveStats(player.classId, Array.from(player.chosenEvolutions) as string[]);
+      const stats = getEffectiveStats(player.classId, Array.from(player.chosenEvolutions) as string[], player.level);
       const magnitude = Math.min(1, Math.hypot(input.moveX, input.moveY));
       const moveAngle = Math.atan2(input.moveY, input.moveX);
       const dx = Math.cos(moveAngle) * magnitude * stats.speed * dt;

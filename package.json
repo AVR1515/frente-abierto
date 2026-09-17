@@ -8,11 +8,14 @@
     "shared"
   ],
   "scripts": {
-    "dev:server": "npm run dev --workspace server",
+    "dev:server": "npm run build --workspace shared && concurrently -n shared,server -c yellow,cyan \"npm run build --workspace shared -- --watch --preserveWatchOutput\" \"npm run dev --workspace server\"",
     "dev:client": "npm run dev --workspace client",
     "build:client": "npm run build --workspace client",
     "build:shared": "npm run build --workspace shared",
     "build:server": "npm run build --workspace shared && npm run build --workspace server",
     "loadtest": "npm run loadtest --workspace server"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
   }
 }

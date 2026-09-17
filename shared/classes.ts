@@ -28,7 +28,7 @@ export const CLASSES: Record<string, ClassDefinition> = {
   assault: {
     id: "assault",
     name: "Asalto",
-    baseStats: { maxHp: 100, speed: 220, weaponCooldownMs: 300, projectileDamage: 12, projectileSpeed: 700 },
+    baseStats: { maxHp: 100, speed: 165, weaponCooldownMs: 300, projectileDamage: 12, projectileSpeed: 700 },
     evolutions: [
       {
         level: 3,
@@ -49,7 +49,7 @@ export const CLASSES: Record<string, ClassDefinition> = {
   engineer: {
     id: "engineer",
     name: "Ingeniero",
-    baseStats: { maxHp: 110, speed: 200, weaponCooldownMs: 400, projectileDamage: 10, projectileSpeed: 650 },
+    baseStats: { maxHp: 110, speed: 150, weaponCooldownMs: 400, projectileDamage: 10, projectileSpeed: 650 },
     evolutions: [
       {
         level: 3,
@@ -70,7 +70,7 @@ export const CLASSES: Record<string, ClassDefinition> = {
   sniper: {
     id: "sniper",
     name: "Francotirador",
-    baseStats: { maxHp: 80, speed: 200, weaponCooldownMs: 900, projectileDamage: 45, projectileSpeed: 1100 },
+    baseStats: { maxHp: 80, speed: 150, weaponCooldownMs: 900, projectileDamage: 45, projectileSpeed: 1100 },
     evolutions: [
       {
         level: 3,
@@ -91,7 +91,7 @@ export const CLASSES: Record<string, ClassDefinition> = {
   medic: {
     id: "medic",
     name: "Médico",
-    baseStats: { maxHp: 90, speed: 230, weaponCooldownMs: 500, projectileDamage: 8, projectileSpeed: 650 },
+    baseStats: { maxHp: 90, speed: 175, weaponCooldownMs: 500, projectileDamage: 8, projectileSpeed: 650 },
     evolutions: [
       {
         level: 3,
@@ -112,7 +112,7 @@ export const CLASSES: Record<string, ClassDefinition> = {
   pilot: {
     id: "pilot",
     name: "Piloto",
-    baseStats: { maxHp: 85, speed: 240, weaponCooldownMs: 350, projectileDamage: 10, projectileSpeed: 700 },
+    baseStats: { maxHp: 85, speed: 180, weaponCooldownMs: 350, projectileDamage: 10, projectileSpeed: 700 },
     evolutions: [
       {
         level: 3,
@@ -138,9 +138,18 @@ export function xpRequiredForLevel(level: number): number {
   return 80 + (level - 1) * 60;
 }
 
-export function getEffectiveStats(classId: string, chosenEvolutionIds: string[]): ClassStats {
+export const STAT_GROWTH_MAX_LEVEL = 10; // a partir de este nivel la progresión natural deja de crecer
+
+export function getEffectiveStats(classId: string, chosenEvolutionIds: string[], level = 1): ClassStats {
   const def = CLASSES[classId] ?? CLASSES.assault;
   const stats: ClassStats = { ...def.baseStats };
+
+  // progresión gradual por nivel, estilo diep.io: empezás chico y lento, y creces de a poco
+  // en vez de tener todo el poder desde el nivel 1. Las evoluciones elegidas se suman aparte.
+  const growthSteps = Math.min(level, STAT_GROWTH_MAX_LEVEL) - 1;
+  stats.maxHp *= 1 + growthSteps * 0.05;
+  stats.speed *= 1 + growthSteps * 0.02;
+  stats.projectileDamage *= 1 + growthSteps * 0.04;
 
   for (const choice of def.evolutions) {
     for (const option of choice.options) {
@@ -152,6 +161,9 @@ export function getEffectiveStats(classId: string, chosenEvolutionIds: string[])
   }
 
   stats.weaponCooldownMs = Math.max(80, stats.weaponCooldownMs);
+  stats.maxHp = Math.round(stats.maxHp);
+  stats.speed = Math.round(stats.speed);
+  stats.projectileDamage = Math.round(stats.projectileDamage);
   return stats;
 }
 

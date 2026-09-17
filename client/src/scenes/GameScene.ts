@@ -40,6 +40,7 @@ interface RemoteVisual {
   toY: number;
   toRotation: number;
   lastUpdate: number;
+  updateIntervalMs: number;
   team: string;
 }
 
@@ -67,9 +68,16 @@ interface VehicleVisual {
   toChassisRotation: number;
   toTurretRotation: number;
   lastUpdate: number;
+  updateIntervalMs: number;
 }
 
-const INTERP_DURATION_MS = 1000 / 20; // aprox. la tasa de sync del servidor
+// Interpolación adaptativa (Fase 8 + fix de lag): en vez de asumir una tasa de
+// sync fija, cada entidad recuerda cuánto tardó realmente su última actualización
+// y estira el lerp exactamente a ese intervalo, así el movimiento remoto no se
+// "congela" y después salta cuando la conexión tiene más latencia o jitter.
+const MIN_INTERP_MS = 1000 / 30;
+const MAX_INTERP_MS = 400;
+const DEFAULT_INTERP_MS = 100;
 const TEAM_COLORS: Record<string, number> = { red: 0xef5350, blue: 0x42a5f5, neutral: 0x9e9e9e };
 
 export class GameScene {
@@ -360,18 +368,21 @@ export class GameScene {
         toChassisRotation: vehicle.chassisRotation,
         toTurretRotation: vehicle.turretRotation,
         lastUpdate: performance.now(),
+        updateIntervalMs: DEFAULT_INTERP_MS,
       };
       this.vehicleVisuals.set(id, visual);
       this.drawVehicle(visual, vehicle);
 
       vehicle.onChange(() => {
+        const now = performance.now();
+        visual.updateIntervalMs = clampInterp(now - visual.lastUpdate);
         visual.fromX = visual.container.x;
         visual.fromY = visual.container.y;
         visual.toX = vehicle.x;
         visual.toY = vehicle.y;
         visual.toChassisRotation = vehicle.chassisRotation;
         visual.toTurretRotation = vehicle.turretRotation;
-        visual.lastUpdate = performance.now();
+        visual.lastUpdate = now;
         this.drawVehicle(visual, vehicle);
 
         if (vehicle.driverSessionId === this.localSessionId) {
@@ -435,18 +446,21 @@ export class GameScene {
         toY: player.y,
         toRotation: player.rotation,
         lastUpdate: performance.now(),
+        updateIntervalMs: DEFAULT_INTERP_MS,
         team: player.team,
       };
       this.visuals.set(sessionId, visual);
       this.drawHpBar(visual, player.hp, player.maxHp);
 
       player.onChange(() => {
+        const now = performance.now();
+        visual.updateIntervalMs = clampInterp(now - visual.lastUpdate);
         visual.fromX = visual.container.x;
         visual.fromY = visual.container.y;
         visual.toX = player.x;
         visual.toY = player.y;
         visual.toRotation = player.rotation;
-        visual.lastUpdate = performance.now();
+        visual.lastUpdate = now;
         this.drawHpBar(visual, player.hp, player.maxHp);
         visual.container.visible = !player.vehicleId;
 
@@ -745,7 +759,7 @@ export class GameScene {
     const player = this.room.state.players.get(this.localSessionId) as any;
     if (!player) return;
 
-    const stats = getEffectiveStats(player.classId, Array.from(player.chosenEvolutions) as string[]);
+    const stats = getEffectiveStats(player.classId, Array.from(player.chosenEvolutions) as string[], player.level);
     const magnitude = Math.min(1, Math.hypot(moveX, moveY));
     const angle = Math.atan2(moveY, moveX);
     const dx = Math.cos(angle) * magnitude * stats.speed * dt;
@@ -780,14 +794,14 @@ export class GameScene {
         return;
       }
 
-      const t = Math.min(1, (now - visual.lastUpdate) / INTERP_DURATION_MS);
+      const t = Math.min(1, (now - visual.lastUpdate) / visual.updateIntervalMs);
       visual.container.x = lerp(visual.fromX, visual.toX, t);
       visual.container.y = lerp(visual.fromY, visual.toY, t);
       visual.graphic.rotation = visual.toRotation;
     });
 
     this.vehicleVisuals.forEach((visual) => {
-      const t = Math.min(1, (now - visual.lastUpdate) / INTERP_DURATION_MS);
+      const t = Math.min(1, (now - visual.lastUpdate) / visual.updateIntervalMs);
       visual.container.x = lerp(visual.fromX, visual.toX, t);
       visual.container.y = lerp(visual.fromY, visual.toY, t);
       visual.chassis.rotation = visual.toChassisRotation;
@@ -864,6 +878,11 @@ function lerp(a: number, b: number, t: number) {
 
 function clampCoord(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function clampInterp(intervalMs: number): number {
+  if (!Number.isFinite(intervalMs) || intervalMs <= 0) return DEFAULT_INTERP_MS;
+  return Math.min(MAX_INTERP_MS, Math.max(MIN_INTERP_MS, intervalMs));
 }
 
 function drawRegularPolygon(g: PIXI.Graphics, cx: number, cy: number, radius: number, sides: number) {
