@@ -43,6 +43,72 @@
         height: 100vh;
         position: relative;
       }
+      #menu-bg {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        overflow: hidden;
+        background: radial-gradient(circle at 50% 20%, #1a1d23, var(--bg-0) 70%);
+      }
+      #menu-bg::before {
+        content: "";
+        position: absolute;
+        inset: -20%;
+        background-image: linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+        background-size: 48px 48px;
+        animation: menu-grid-pan 22s linear infinite;
+        mask-image: radial-gradient(circle at 50% 35%, black 0%, transparent 72%);
+      }
+      @keyframes menu-grid-pan {
+        from {
+          transform: translate(0, 0);
+        }
+        to {
+          transform: translate(48px, 48px);
+        }
+      }
+      .menu-orb {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(50px);
+        opacity: 0.35;
+        animation: menu-orb-float 14s ease-in-out infinite;
+      }
+      .menu-orb.orb-a {
+        width: 320px;
+        height: 320px;
+        left: 8%;
+        top: 18%;
+        background: var(--accent);
+        animation-delay: 0s;
+      }
+      .menu-orb.orb-b {
+        width: 260px;
+        height: 260px;
+        right: 10%;
+        bottom: 14%;
+        background: var(--accent-2);
+        animation-delay: -6s;
+      }
+      .menu-orb.orb-c {
+        width: 200px;
+        height: 200px;
+        right: 30%;
+        top: 8%;
+        background: var(--red);
+        opacity: 0.18;
+        animation-delay: -10s;
+      }
+      @keyframes menu-orb-float {
+        0%,
+        100% {
+          transform: translate(0, 0) scale(1);
+        }
+        50% {
+          transform: translate(24px, -18px) scale(1.08);
+        }
+      }
       #ui-overlay {
         position: fixed;
         inset: 0;
@@ -50,7 +116,7 @@
         align-items: center;
         justify-content: center;
         z-index: 10;
-        background: radial-gradient(circle at 50% 30%, rgba(255, 152, 0, 0.06), transparent 60%), rgba(5, 6, 8, 0.55);
+        background: radial-gradient(circle at 50% 30%, rgba(255, 152, 0, 0.06), transparent 60%), rgba(5, 6, 8, 0.4);
         backdrop-filter: blur(3px);
       }
       #ui-overlay.hidden {
@@ -77,10 +143,30 @@
           transform: none;
         }
       }
+      .panel.menu-panel {
+        min-width: 340px;
+        padding: 36px 40px 32px;
+      }
+      .panel .crest {
+        width: 56px;
+        height: 56px;
+        margin: 0 auto 14px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, rgba(255, 152, 0, 0.18), rgba(79, 195, 247, 0.18));
+        border: 1px solid var(--panel-border);
+        box-shadow: 0 0 24px rgba(255, 152, 0, 0.15);
+      }
+      .panel .crest svg {
+        width: 28px;
+        height: 28px;
+      }
       .panel .brand {
         font-family: var(--font-display);
         font-weight: 700;
-        font-size: 34px;
+        font-size: 36px;
         letter-spacing: 1px;
         margin: 0 0 2px;
         background: linear-gradient(90deg, var(--accent), var(--accent-2));
@@ -91,9 +177,24 @@
       .panel .tagline {
         font-size: 12px;
         color: var(--text-dim);
-        margin: 0 0 22px;
-        letter-spacing: 0.5px;
+        margin: 0 0 24px;
+        letter-spacing: 1.5px;
         text-transform: uppercase;
+      }
+      .panel.menu-panel button.primary {
+        padding: 13px;
+        font-size: 15px;
+        box-shadow: 0 0 0 rgba(255, 152, 0, 0.4);
+        animation: menu-play-pulse 2.6s ease-in-out infinite;
+      }
+      @keyframes menu-play-pulse {
+        0%,
+        100% {
+          box-shadow: 0 0 0 rgba(255, 152, 0, 0);
+        }
+        50% {
+          box-shadow: 0 0 18px rgba(255, 152, 0, 0.35);
+        }
       }
       .panel h2 {
         margin-top: 0;
@@ -347,6 +448,11 @@
     </style>
   </head>
   <body>
+    <div id="menu-bg">
+      <div class="menu-orb orb-a"></div>
+      <div class="menu-orb orb-b"></div>
+      <div class="menu-orb orb-c"></div>
+    </div>
     <div id="app"></div>
     <div id="ui-overlay"><div class="panel" id="panel-content"></div></div>
     <div id="hud"></div>

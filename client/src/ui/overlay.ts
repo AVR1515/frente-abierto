@@ -5,6 +5,13 @@ const panel = document.getElementById("panel-content") as HTMLDivElement;
 
 export function showMainMenu(onPlay: () => void, onHowToPlay: () => void) {
   panel.innerHTML = "";
+  panel.className = "panel menu-panel";
+
+  const crest = document.createElement("div");
+  crest.className = "crest";
+  crest.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L4 5v6c0 5 3.4 8.7 8 9 4.6-.3 8-4 8-9V5l-8-3z" stroke="url(#g)" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 8v8M8.5 10.5h7" stroke="url(#g)" stroke-width="1.6" stroke-linecap="round"/><defs><linearGradient id="g" x1="4" y1="2" x2="20" y2="20"><stop stop-color="#ff9800"/><stop offset="1" stop-color="#4fc3f7"/></linearGradient></defs></svg>';
+  panel.appendChild(crest);
 
   const brand = document.createElement("div");
   brand.className = "brand";
@@ -44,6 +51,7 @@ export function showMainMenu(onPlay: () => void, onHowToPlay: () => void) {
 
 export function showHowToPlay(onBack: () => void) {
   panel.innerHTML = "";
+  panel.className = "panel";
   const title = document.createElement("h2");
   title.textContent = "Cómo jugar";
   panel.appendChild(title);
@@ -83,6 +91,7 @@ export function showHowToPlay(onBack: () => void) {
 
 export function showPauseMenu(onResume: () => void, onLeave: () => void) {
   panel.innerHTML = "";
+  panel.className = "panel";
   const title = document.createElement("h2");
   title.textContent = "Pausa";
   panel.appendChild(title);
@@ -107,6 +116,7 @@ export function showPauseMenu(onResume: () => void, onLeave: () => void) {
 
 export function showClassSelect(onPick: (classId: string) => void) {
   panel.innerHTML = "";
+  panel.className = "panel";
   const title = document.createElement("h2");
   title.textContent = "Elegí tu clase";
   panel.appendChild(title);
@@ -126,6 +136,7 @@ export function showClassSelect(onPick: (classId: string) => void) {
 
 export function showEvolutionChoice(options: EvolutionOption[], onPick: (optionId: string) => void) {
   panel.innerHTML = "";
+  panel.className = "panel";
   const title = document.createElement("h2");
   title.textContent = "¡Subiste de nivel! Elegí una mejora";
   panel.appendChild(title);
@@ -184,6 +195,7 @@ export function showStreamerSetup(
   onCreate: (opts: { streamerName: string; whitelist: string[]; friendlyFire: boolean }) => void
 ) {
   panel.innerHTML = "";
+  panel.className = "panel";
   const title = document.createElement("h2");
   title.textContent = "Panel del streamer";
   panel.appendChild(title);
@@ -224,6 +236,7 @@ export function showStreamerSetup(
 
 export function showViewerNamePrompt(roomCode: string, onSubmit: (displayName: string) => void) {
   panel.innerHTML = "";
+  panel.className = "panel";
   const title = document.createElement("h2");
   title.textContent = `Unirse a la sala ${roomCode}`;
   panel.appendChild(title);
@@ -254,6 +267,7 @@ export function showViewerNamePrompt(roomCode: string, onSubmit: (displayName: s
 
 export function showJoinError(message: string) {
   panel.innerHTML = "";
+  panel.className = "panel";
   const title = document.createElement("h2");
   title.textContent = "No se pudo entrar";
   panel.appendChild(title);
@@ -299,11 +313,19 @@ export function toggleElementHidden(id: string) {
   document.getElementById(id)?.classList.toggle("hidden");
 }
 
-export function showMatchEnd(winningTeam: string) {
+export function showMatchEnd(winningTeam: string, onBackToMenu: () => void) {
   panel.innerHTML = "";
+  panel.className = "panel";
   const title = document.createElement("h2");
   title.textContent =
     winningTeam === "draw" ? "¡Empate!" : winningTeam === "red" ? "¡Gana el equipo Rojo!" : "¡Gana el equipo Azul!";
   panel.appendChild(title);
+
+  const btn = document.createElement("button");
+  btn.className = "primary";
+  btn.textContent = "Volver al menú";
+  btn.onclick = onBackToMenu;
+  panel.appendChild(btn);
+
   overlay.classList.remove("hidden");
 }

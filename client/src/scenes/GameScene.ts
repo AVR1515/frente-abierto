@@ -46,6 +46,11 @@ interface RemoteVisual {
 
 interface ProjectileVisual {
   graphic: PIXI.Graphics;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  lastUpdate: number;
 }
 
 interface ControlPointVisual {
@@ -111,6 +116,7 @@ export class GameScene {
   private predictedX = 0;
   private predictedY = 0;
   private pendingInputs: { seq: number; moveX: number; moveY: number; dt: number }[] = [];
+  private lastInputSentAt = performance.now();
 
   private paused = false;
   private pingMs: number | null = null;
@@ -167,14 +173,23 @@ export class GameScene {
         () => {
           this.paused = false;
         },
-        () => {
-          this.room.leave();
-          location.href = location.pathname;
-        }
+        () => this.leaveToMenu()
       );
     } else {
       hideOverlay();
     }
+  }
+
+  private leaveToMenu() {
+    this.room.leave();
+    location.href = location.pathname;
+  }
+
+  private showMatchEndOnce(winningTeam: string) {
+    if (this.matchEndShown) return;
+    this.matchEndShown = true;
+    this.paused = true; // deja de mandar input/disparos mientras se ve la pantalla final
+    showMatchEnd(winningTeam, () => this.leaveToMenu());
   }
 
   private drawMapBounds() {
@@ -507,11 +522,27 @@ export class GameScene {
       graphic.x = projectile.x;
       graphic.y = projectile.y;
       this.projectileLayer.addChild(graphic);
-      this.projectileVisuals.set(id, { graphic });
 
+      const visual: ProjectileVisual = {
+        graphic,
+        x: projectile.x,
+        y: projectile.y,
+        vx: projectile.vx,
+        vy: projectile.vy,
+        lastUpdate: performance.now(),
+      };
+      this.projectileVisuals.set(id, visual);
+
+      // los proyectiles viajan en línea recta a velocidad constante: en vez de
+      // saltar de sync en sync, se extrapolan cuadro a cuadro con su propia
+      // velocidad (dead reckoning), que da un movimiento perfectamente fluido
+      // y se autocorrige apenas llega una actualización real del servidor.
       projectile.onChange(() => {
-        graphic.x = projectile.x;
-        graphic.y = projectile.y;
+        visual.x = projectile.x;
+        visual.y = projectile.y;
+        visual.vx = projectile.vx;
+        visual.vy = projectile.vy;
+        visual.lastUpdate = performance.now();
       });
     });
 
@@ -541,9 +572,7 @@ export class GameScene {
     });
 
     this.room.onMessage("matchEnded", (message: { winningTeam: string }) => {
-      if (this.matchEndShown) return;
-      this.matchEndShown = true;
-      showMatchEnd(message.winningTeam);
+      this.showMatchEndOnce(message.winningTeam);
     });
 
     this.room.onStateChange(() => {
@@ -559,6 +588,9 @@ export class GameScene {
           this.room.send("commanderAddPoints", {});
         });
       }
+
+      // cubre tanto el broadcast en vivo como a quien se une despues de terminada la partida
+      if (this.room.state.matchEnded) this.showMatchEndOnce(this.room.state.winningTeam);
     });
 
     this.room.onMessage("commanderStrikeTelegraph", (message: { x: number; y: number }) => {
@@ -748,7 +780,13 @@ export class GameScene {
     });
 
     if (!this.localVehicleId) {
-      const dt = 1 / INPUT_SEND_RATE_HZ;
+      // dt real medido, no un intervalo fijo asumido: setInterval no es preciso
+      // (se atrasa con la carga de renderizado), y un dt equivocado hace que la
+      // predicción se desvíe de a poco de la posición real del servidor, lo que
+      // termina viéndose como microsaltos cada vez que llega una corrección.
+      const now = performance.now();
+      const dt = Math.min(0.2, (now - this.lastInputSentAt) / 1000);
+      this.lastInputSentAt = now;
       this.pendingInputs.push({ seq, moveX, moveY, dt });
       this.applyMovement(moveX, moveY, dt);
     }
@@ -806,6 +844,12 @@ export class GameScene {
       visual.container.y = lerp(visual.fromY, visual.toY, t);
       visual.chassis.rotation = visual.toChassisRotation;
       if (visual.turret.visible) visual.turret.rotation = visual.toTurretRotation;
+    });
+
+    this.projectileVisuals.forEach((visual) => {
+      const elapsedSec = (now - visual.lastUpdate) / 1000;
+      visual.graphic.x = visual.x + visual.vx * elapsedSec;
+      visual.graphic.y = visual.y + visual.vy * elapsedSec;
     });
 
     if (this.localVehicleId) {
